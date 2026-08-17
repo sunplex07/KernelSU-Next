@@ -6,6 +6,9 @@
 
 #include "uapi/app_profile.h"
 
+// 2: allowlist v4 root profile flags
+#define KERNEL_SU_UAPI_VERSION 2
+
 /* Magic numbers for reboot hook to install fd */
 static const __u32 KSU_INSTALL_MAGIC1 = 0xDEADBEEF;
 static const __u32 KSU_INSTALL_MAGIC2 = 0xCAFEBABE;
@@ -35,6 +38,15 @@ struct ksu_get_info_cmd {
     __u32 version; /* Output: KERNEL_SU_VERSION */
     __u32 flags; /* Output: KSU_GET_INFO_FLAG_* bits */
     __u32 features; /* Output: max feature ID supported */
+    __u32 uapi_version; /* Output: KERNEL_SU_UAPI_VERSION */
+};
+
+/* The pre-UAPI-versioning form, kept so anything built against the old
+ * three-field struct still reads the same offsets. */
+struct ksu_get_info_legacy_cmd {
+    __u32 version;
+    __u32 flags;
+    __u32 features;
 };
 
 struct ksu_report_event_cmd {

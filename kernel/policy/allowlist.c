@@ -32,7 +32,7 @@
 #include "compat/kernel_compat.h"
 
 #define FILE_MAGIC 0x7f4b5355 // ' KSU', u32
-#define FILE_FORMAT_VERSION 3 // u32
+#define FILE_FORMAT_VERSION 4 // u32
 
 #define KSU_APP_PROFILE_PRESERVE_UID 9999 // NOBODY_UID
 #define KSU_DEFAULT_SELINUX_DOMAIN "u:r:" KERNEL_SU_DOMAIN ":s0"
@@ -159,9 +159,20 @@ static bool profile_valid(struct app_profile *profile)
 
 	bool need_migrate_su_domain = false;
 
-	if (unlikely(profile->version == 2)) {
+	/*
+	 * Profiles written by an older kernel predate root_profile.flags, added
+	 * in app-profile v4. Migrate them rather than rejecting, so an existing
+	 * install keeps its superuser grants across the upgrade; adopt the same
+	 * secure default upstream gives migrated profiles.
+	 */
+	if (unlikely(profile->version == 2 || profile->version == 3)) {
+		if (profile->version == 2) {
+			need_migrate_su_domain = true;
+		}
+		if (profile->allow_su) {
+			profile->rp_config.profile.flags = FLAG_KSU_NO_NEW_PRIVS;
+		}
 		profile->version = KSU_APP_PROFILE_VER;
-		need_migrate_su_domain = true;
 	}
 
 	if (strnlen(profile->key, sizeof(profile->key)) >= sizeof(profile->key)) {
@@ -541,12 +552,32 @@ void ksu_load_allow_list()
 		goto exit;
 	}
 
+	/*
+	 * The version was previously read, logged and then ignored. That was
+	 * harmless only while the record size never changed. app-profile v4
+	 * appends root_profile.flags, taking sizeof(struct app_profile) from 776
+	 * to 784 (measured on this tree), so reading a v3 file at the new size
+	 * would misalign every record after the first -- silently granting or
+	 * losing root for the wrong uids. Read old files at their own size and
+	 * let profile_valid() migrate each record.
+	 */
+	if (version < 2 || version > FILE_FORMAT_VERSION) {
+		pr_err("invalid allowlist version: %d\n", version);
+		goto exit;
+	}
+
 	pr_info("allowlist version: %d\n", version);
+
+	static const size_t kAppProfileSizePreV4 = 776;
+	size_t app_profile_size = version < FILE_FORMAT_VERSION ?
+					  kAppProfileSizePreV4 :
+					  sizeof(struct app_profile);
 
 	while (true) {
 		struct app_profile profile;
 
-		ret = ksu_kernel_read_compat(fp, &profile, sizeof(profile), &off);
+		memset(&profile, 0, sizeof(profile));
+		ret = ksu_kernel_read_compat(fp, &profile, app_profile_size, &off);
 
 		if (ret <= 0) {
 			pr_info("load_allow_list read err: %zd\n", ret);
@@ -557,6 +588,15 @@ void ksu_load_allow_list()
                 profile.current_uid, profile.allow_su);
         ksu_set_app_profile(&profile);
     }
+
+	ksu_show_allow_list();
+	filp_close(fp, 0);
+	if (version < FILE_FORMAT_VERSION) {
+		pr_info("allowlist migrated to version %d, persisting\n",
+			FILE_FORMAT_VERSION);
+		ksu_persistent_allow_list();
+	}
+	return;
 
 exit:
 	ksu_show_allow_list();

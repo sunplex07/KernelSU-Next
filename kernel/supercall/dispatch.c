@@ -54,6 +54,7 @@ static int do_get_info(void __user *arg)
 		cmd.flags |= KSU_GET_INFO_FLAG_LATE_LOAD;
 	}
 	cmd.features = KSU_FEATURE_MAX;
+	cmd.uapi_version = KERNEL_SU_UAPI_VERSION;
 
 	if (copy_to_user(arg, &cmd, sizeof(cmd))) {
 		pr_err("get_version: copy_to_user failed\n");
