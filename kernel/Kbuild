@@ -100,6 +100,36 @@ endif
 ifdef KSU_GIT_VERSION_VALID
 # ksu_version: major * 30000 + git version for historical reasons
 $(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION) + 150))
+
+# Floor the reported version at the manager's MINIMAL_SUPPORTED_KERNEL.
+#
+# The manager computes fullFeatured = !requireNewKernel(), and requireNewKernel()
+# is (version < MINIMAL_SUPPORTED_KERNEL) || checkUAPIMismatch(). Below that
+# integer it degrades: the module and superuser screens stop working. The value
+# is 33188 for v3.3.0 (manager Natives.kt).
+#
+# That bar cannot be reached by commit count on this branch. The legacy line
+# tops out around 33143 upstream, and its newer commits do not compile on 4.4
+# (ALIGN_DOWN in adb_root.c, selinux_hide.c, the sepolicy flex_array rewrite),
+# which is why this branch is based on the v3.2.0-legacy tag instead.
+#
+# What the gate is actually protecting against is a driver older than the UAPI
+# it talks. This branch implements that ABI properly -- KERNEL_SU_UAPI_VERSION 2
+# and app profile v4 with root_profile.flags, including the on-disk migration --
+# and the features it does NOT have (sulog, adb_root, selinux_hide) are reported
+# honestly through KSU_IOCTL_GET_FEATURE, which is the per-feature negotiation
+# the manager uses before touching any of them. So the coarse version check is
+# the only thing left, and satisfying it does not make the driver claim any
+# capability it lacks.
+#
+# Set to the minimum, not higher: if upstream raises the bar again it should
+# force this to be revisited rather than silently pass.
+KSU_VERSION_FLOOR := 33188
+ifeq ($(shell expr $(KSU_VERSION) \< $(KSU_VERSION_FLOOR)),1)
+$(info -- KernelSU-Next version: $(KSU_VERSION) raised to the manager floor $(KSU_VERSION_FLOOR))
+$(eval KSU_VERSION=$(KSU_VERSION_FLOOR))
+endif
+
 $(info -- KernelSU-Next version: $(KSU_VERSION))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 else
