@@ -119,13 +119,14 @@ $(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION) + 150))
 # which is why this branch is based on the v3.2.0-legacy tag instead.
 #
 # What the gate is actually protecting against is a driver older than the UAPI
-# it talks. This branch implements that ABI properly -- KERNEL_SU_UAPI_VERSION 2
-# and app profile v4 with root_profile.flags, including the on-disk migration --
-# and the features it does NOT have (sulog, adb_root, selinux_hide) are reported
-# honestly through KSU_IOCTL_GET_FEATURE, which is the per-feature negotiation
-# the manager uses before touching any of them. So the coarse version check is
-# the only thing left, and satisfying it does not make the driver claim any
-# capability it lacks.
+# it talks, and this branch is not that. It implements the ABI properly --
+# KERNEL_SU_UAPI_VERSION 2 and app profile v4 with root_profile.flags, including
+# the on-disk migration -- and it implements every feature id v3.3.0 enumerates:
+# SU_COMPAT, KERNEL_UMOUNT, SULOG, ADB_ROOT and SELINUX_HIDE_STATUS. The
+# capability set behind the number is real, so satisfying the check does not
+# make the driver claim anything it lacks; the only thing it cannot reproduce is
+# upstream's commit count, which this branch will never match because it is
+# based on the last legacy tag that builds on 4.4.
 #
 # Set to the minimum, not higher: if upstream raises the bar again it should
 # force this to be revisited rather than silently pass.
