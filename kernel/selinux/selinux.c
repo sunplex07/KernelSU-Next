@@ -67,6 +67,25 @@ __is_ksu_transition(const struct task_security_struct *old_tsec,
 }
 #endif
 
+/*
+ * Put adbd into the KernelSU domain. adb_root.c calls this after deciding the
+ * process is allowed root; it mirrors escape_to_root_for_init() rather than
+ * upstream's transive_to_domain(..., true), because the clear_exec_sid argument
+ * does not exist in this tree's 2-argument form.
+ */
+void escape_to_root_for_adb_root(void)
+{
+	struct cred *cred = prepare_creds();
+
+	if (!cred) {
+		pr_err("Failed to prepare adbd's creds!\n");
+		return;
+	}
+
+	setup_selinux(KERNEL_SU_CONTEXT, cred);
+	commit_creds(cred);
+}
+
 void setup_selinux(const char *domain, struct cred *cred)
 {
     if (transive_to_domain(domain, cred)) {

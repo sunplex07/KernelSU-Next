@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 
 #include "adb_root.h"
+#include "compat/kernel_compat.h" /* ALIGN_DOWN on pre-4.19 */
 #include "arch.h"
 #include "policy/feature.h"
 #include "selinux/selinux.h"

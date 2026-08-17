@@ -13,6 +13,7 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include "policy/feature.h"
+#include "compat/kernel_compat.h" /* __nocfi on kernels without CFI */
 #include "include/ksu.h"
 #include  "uapi/feature.h"
 #include "selinux/selinux.h"
