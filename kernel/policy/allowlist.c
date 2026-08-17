@@ -459,6 +459,13 @@ static void do_persistent_allow_list(struct work_struct *work)
     struct perm_data *p = NULL;
     loff_t off = 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) ||                           \
+	defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
+	if (ksu_cred && !((struct cred *)ksu_cred)->session_keyring && init_session_keyring) {
+		((struct cred *)ksu_cred)->session_keyring = init_session_keyring;
+	}
+#endif
+
     const struct cred *saved = override_creds(ksu_cred);
     struct file *fp =
         ksu_filp_open_compat(KERNEL_SU_ALLOWLIST, O_WRONLY | O_CREAT | O_TRUNC, 0644);

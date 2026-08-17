@@ -51,25 +51,19 @@ static int transive_to_domain(const char *domain, struct cred *cred)
 }
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
+bool is_ksu_transition(u32 old_sid, u32 new_sid)
+{
+	if (cached_init_sid && cached_su_sid) {
+		return (old_sid == cached_init_sid && new_sid == cached_su_sid);
+	}
+	return false;
+}
+
 bool __maybe_unused
-is_ksu_transition(const struct task_security_struct *old_tsec,
+__is_ksu_transition(const struct task_security_struct *old_tsec,
 		  const struct task_security_struct *new_tsec)
 {
-	static u32 ksu_sid;
-	char *secdata;
-	u32 seclen;
-	bool allowed = false;
-
-	if (!ksu_sid)
-		security_secctx_to_secid(KERNEL_SU_CONTEXT,
-					 strlen(KERNEL_SU_CONTEXT), &ksu_sid);
-
-	if (security_secid_to_secctx(old_tsec->sid, &secdata, &seclen))
-		return false;
-
-	allowed = (!strcmp("u:r:init:s0", secdata) && new_tsec->sid == ksu_sid);
-	security_release_secctx(secdata, seclen);
-	return allowed;
+	return is_ksu_transition(old_tsec->sid, new_tsec->sid);
 }
 #endif
 
