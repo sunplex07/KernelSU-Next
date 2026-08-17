@@ -78,6 +78,24 @@ $(info -- KernelSU-Next Git repo detected at: $(GIT_ROOT))
 endif
 endif
 
+# This tree reaches the build server by rsync, which deliberately omits .git.
+# Both probes above therefore fail there, the version falls back to 1, and the
+# manager app refuses to work against it -- silently, since the build still
+# succeeds. Environment variables cannot fix this: the Android build sanitizes
+# them before the kernel sub-build. A file inside the tree does travel, so
+# push-deltas.sh writes the real values on the laptop where .git exists.
+ifndef KSU_GIT_VERSION_VALID
+KSU_VERSION_FILE := $(MDIR)../.ksu_version
+ifneq ($(wildcard $(KSU_VERSION_FILE)),)
+KSU_GIT_VERSION := $(shell sed -n 's/^count=//p' $(KSU_VERSION_FILE))
+KSU_GIT_TAG := $(shell sed -n 's/^tag=//p' $(KSU_VERSION_FILE))
+ifneq ($(KSU_GIT_VERSION),)
+KSU_GIT_VERSION_VALID := 1
+$(info -- KernelSU-Next version pinned by $(KSU_VERSION_FILE))
+endif
+endif
+endif
+
 # Calculate version if git version is available
 ifdef KSU_GIT_VERSION_VALID
 # ksu_version: major * 30000 + git version for historical reasons
