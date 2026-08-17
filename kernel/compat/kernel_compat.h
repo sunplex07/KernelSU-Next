@@ -21,6 +21,27 @@
 #endif
 #endif
 
+/*
+ * ALIGN_DOWN entered include/linux/kernel.h in 4.19. adb_root.c uses it to lay
+ * out the environment block it injects, so on older kernels it is an implicit
+ * declaration and the build fails with -Werror. Same expression the upstream
+ * kernel uses, expressed with this tree's own __ALIGN_KERNEL.
+ */
+#ifndef ALIGN_DOWN
+#define ALIGN_DOWN(x, a) __ALIGN_KERNEL((x) - ((a) - 1), (a))
+#endif
+
+/*
+ * __nocfi marks a function that must not be instrumented by Clang's Control
+ * Flow Integrity. CFI arrived long after 4.4, so the attribute is simply absent
+ * here and the token makes the parser fail at the declaration
+ * ("expected ';' after top level declarator"). Empty is the correct definition:
+ * with no CFI there is nothing to opt out of.
+ */
+#ifndef __nocfi
+#define __nocfi
+#endif
+
 // Checks for UH, KDP and RKP
 #ifdef SAMSUNG_UH_DRIVER_EXIST
 #if defined(CONFIG_UH) || defined(CONFIG_KDP) || defined(CONFIG_RKP)

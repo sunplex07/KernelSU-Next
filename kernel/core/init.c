@@ -7,6 +7,9 @@
 #include <linux/workqueue.h>
 
 #include "policy/allowlist.h"
+#include "feature/sulog.h"
+#include "feature/adb_root.h"
+#include "feature/selinux_hide.h"
 #include "policy/app_profile.h"
 #include "policy/feature.h"
 #include "klog.h" // IWYU pragma: keep
@@ -100,6 +103,8 @@ int __init kernelsu_init(void)
 
 	ksu_supercalls_init();
 
+	ksu_sulog_init();
+
 	
 
 	if (ksu_late_loaded) {
@@ -135,6 +140,10 @@ int __init kernelsu_init(void)
 		ksu_syscall_hook_manager_init();
 		
 		ksu_lsm_hook_init();
+
+		ksu_adb_root_init();
+
+		ksu_selinux_hide_init();
 
 		ksu_allowlist_init();
 

@@ -3,6 +3,12 @@ kernelsu-objs := core/init.o
 kernelsu-objs += compat/kernel_compat.o
 kernelsu-objs += feature/kernel_umount.o
 kernelsu-objs += feature/sucompat.o
+kernelsu-objs += feature/adb_root.o
+kernelsu-objs += feature/selinux_hide.o
+kernelsu-objs += feature/sulog.o
+kernelsu-objs += sulog/event.o
+kernelsu-objs += sulog/fd.o
+kernelsu-objs += infra/event_queue.o
 
 kernelsu-objs += hook/hook_manager.o
 kernelsu-objs += hook/lsm_hooks.o
