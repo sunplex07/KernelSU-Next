@@ -10,6 +10,7 @@
 #include "compat/kernel_compat.h"
 #include "setuid_hook.h"
 #include "manager/throne_tracker.h"
+#include "supercall/compat.h"
 
 #ifndef KSU_KPROBES_HOOK
 
@@ -132,7 +133,9 @@ static struct security_hook_list ksu_hooks[] = {
 #endif
 	LSM_HOOK_INIT(inode_permission, ksu_inode_permission),
 	LSM_HOOK_INIT(inode_rename, ksu_inode_rename),
-	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid)
+	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+	/* v1.x managers talk to the kernel via prctl(0xDEADBEEF) */
+	LSM_HOOK_INIT(task_prctl, ksu_handle_legacy_prctl)
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)

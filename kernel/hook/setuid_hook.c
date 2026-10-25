@@ -25,6 +25,7 @@
 #include "hook/hook_manager.h"
 #include "feature/kernel_umount.h"
 #include "compat/kernel_compat.h"
+#include "supercall/compat.h"
 
 int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
 {
@@ -46,6 +47,7 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
         ksu_set_task_tracepoint_flag(current);
 #endif
 
+        ksu_compat_on_manager_launch(new_uid);
         pr_info("install fd for manager: %d\n", new_uid);
         ksu_install_fd();
         return 0;

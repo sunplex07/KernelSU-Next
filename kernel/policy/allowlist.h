@@ -46,6 +46,8 @@ struct app_profile *ksu_get_app_profile(uid_t uid);
 // only used to put the app_profile returned by ksu_get_app_profile
 void ksu_put_app_profile(struct app_profile *);
 int ksu_set_app_profile(struct app_profile *);
+/* v2/v3 profile -> current, same as loading an old allowlist file */
+void ksu_upgrade_app_profile(u32 version, struct app_profile *profile);
 
 bool ksu_uid_should_umount(uid_t uid);
 struct root_profile *ksu_get_root_profile(uid_t uid);
