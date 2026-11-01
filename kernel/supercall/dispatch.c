@@ -1030,6 +1030,19 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
         .handler = do_get_version_tag,
         .perm_check = manager_or_root
     },
+    /* manager v3.0.0 used 19/20 for these before they moved to 98/99 */
+    {
+        .cmd = _IOC(_IOC_READ, 'K', 19, 0),
+        .name = "GET_HOOK_MODE_V300",
+        .handler = do_get_hook_mode,
+        .perm_check = manager_or_root
+    },
+    {
+        .cmd = _IOC(_IOC_READ, 'K', 20, 0),
+        .name = "GET_VERSION_TAG_V300",
+        .handler = do_get_version_tag,
+        .perm_check = manager_or_root
+    },
     {
         .cmd = 0,
         .name = NULL,
