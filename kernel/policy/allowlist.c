@@ -312,7 +312,7 @@ bool ksu_uid_should_umount(uid_t uid)
 {
     struct app_profile *profile;
     bool res;
-    if (likely(ksu_is_manager_appid_valid()) && unlikely(ksu_get_manager_appid() == uid % PER_USER_RANGE)) {
+    if (is_uid_manager(uid)) {
         // we should not umount on manager!
         return false;
     }
@@ -556,6 +556,11 @@ static void migrate_profile(u32 version, struct app_profile *profile)
     }
 
     profile->version = KSU_APP_PROFILE_VER;
+}
+
+void ksu_upgrade_app_profile(u32 version, struct app_profile *profile)
+{
+    migrate_profile(version, profile);
 }
 
 void ksu_load_allow_list()

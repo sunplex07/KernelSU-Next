@@ -23,6 +23,7 @@
 #include "sulog/event.h"
 #include "sulog/fd.h"
 #include "supercall/supercall.h"
+#include "supercall/compat.h"
 
 static int do_grant_root(void __user *arg)
 {
@@ -61,7 +62,8 @@ static int do_get_info(void __user *arg)
         cmd.flags |= KSU_GET_INFO_FLAG_LATE_LOAD;
     }
     cmd.features = KSU_FEATURE_MAX;
-    cmd.uapi_version = KERNEL_SU_UAPI_VERSION;
+    /* each manager/ksud sees the uapi it was built for */
+    cmd.uapi_version = ksu_compat_uapi_version();
 
     if (copy_to_user(arg, &cmd, sizeof(cmd))) {
         pr_err("get_version: copy_to_user failed\n");
@@ -98,16 +100,11 @@ static int do_get_info_legacy(void __user *arg)
 	return 0;
 }
 
-static int do_report_event(void __user *arg)
+int ksu_handle_report_event(u32 event)
 {
 	static bool services_started = false;
-	struct ksu_report_event_cmd cmd;
 
-	if (copy_from_user(&cmd, arg, sizeof(cmd))) {
-		return -EFAULT;
-	}
-
-	switch (cmd.event) {
+	switch (event) {
 	case EVENT_POST_FS_DATA: {
 		static bool post_fs_data_lock = false;
 
@@ -158,9 +155,24 @@ static int do_report_event(void __user *arg)
 	return 0;
 }
 
+static int do_report_event(void __user *arg)
+{
+	struct ksu_report_event_cmd cmd;
+
+	if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+		return -EFAULT;
+	}
+
+	return ksu_handle_report_event(cmd.event);
+}
+
 static int do_set_sepolicy(void __user *arg)
 {
 	struct ksu_set_sepolicy_cmd cmd;
+
+	/* old ksud sends {cmd, arg}, don't misread it as {data_len, data} */
+	if (ksu_compat_old_sepolicy_payload())
+		return -EOPNOTSUPP;
 
 	if (copy_from_user(&cmd, arg, sizeof(cmd))) {
 		return -EFAULT;
@@ -350,6 +362,8 @@ static int do_get_app_profile(void __user *arg)
     return -EOPNOTSUPP;
 #endif
     uid_t uid;
+    u32 version = 0;
+    size_t size;
     struct app_profile *profile;
     int ret = 0;
 
@@ -358,6 +372,12 @@ static int do_get_app_profile(void __user *arg)
         pr_err("get_app_profile: copy_from_user failed\n");
         return -EFAULT;
     }
+    /* v2/v3 managers hand in the smaller pre-v4 struct */
+    if (copy_from_user(&version, (char __user *)arg + offsetof(struct ksu_get_app_profile_cmd, profile.version),
+                       sizeof(version))) {
+        return -EFAULT;
+    }
+    size = ksu_compat_profile_size(version);
 
     rcu_read_lock();
     profile = ksu_get_app_profile(uid);
@@ -366,8 +386,12 @@ static int do_get_app_profile(void __user *arg)
         ret = -ENOENT;
     } else {
         if (copy_to_user((char __user *)arg + offsetof(struct ksu_get_app_profile_cmd, profile), profile,
-                         sizeof(struct app_profile))) {
+                         size)) {
             pr_err("get_app_profile: copy_to_user failed\n");
+            ret = -EFAULT;
+        } else if (size != sizeof(struct app_profile) &&
+                   copy_to_user((char __user *)arg + offsetof(struct ksu_get_app_profile_cmd, profile.version),
+                                &version, sizeof(version))) {
             ret = -EFAULT;
         }
         ksu_put_app_profile(profile);
@@ -382,9 +406,25 @@ static int do_set_app_profile(void __user *arg)
 #endif
 
     struct ksu_set_app_profile_cmd cmd;
+    u32 version = 0;
     int ret;
 
-	if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+    if (copy_from_user(&version, (char __user *)arg + offsetof(struct ksu_set_app_profile_cmd, profile.version),
+                       sizeof(version))) {
+        return -EFAULT;
+    }
+
+    if (ksu_compat_profile_size(version) != sizeof(struct app_profile)) {
+        /* v2/v3 manager: pre-v4 struct, upgrade it like the allowlist loader does */
+        memset(&cmd, 0, sizeof(cmd));
+        if (copy_from_user(&cmd, arg, KSU_APP_PROFILE_SIZE_PRE_V4)) {
+            return -EFAULT;
+        }
+        ret = ksu_compat_upgrade_profile(version, &cmd.profile);
+        if (ret) {
+            return ret;
+        }
+    } else if (copy_from_user(&cmd, arg, sizeof(cmd))) {
 		pr_err("set_app_profile: copy_from_user failed\n");
 		return -EFAULT;
 	}
@@ -410,6 +450,12 @@ static int do_get_feature(void __user *arg)
 		return -EFAULT;
 	}
 
+	/* id 2 meant something else to v3.0.0-era managers */
+	if (ksu_compat_feature_hidden(cmd.feature_id)) {
+		cmd.value = 0;
+		cmd.supported = 0;
+		return copy_to_user(arg, &cmd, sizeof(cmd)) ? -EFAULT : 0;
+	}
 
 	ret = ksu_get_feature(cmd.feature_id, &cmd.value, &supported);
 	cmd.supported = 0;
@@ -443,6 +489,8 @@ static int do_set_feature(void __user *arg)
 		return -EFAULT;
 	}
 
+	if (ksu_compat_feature_hidden(cmd.feature_id))
+		return -EOPNOTSUPP;
 
 	ret = ksu_set_feature(cmd.feature_id, cmd.value);
 	if (ret) {
