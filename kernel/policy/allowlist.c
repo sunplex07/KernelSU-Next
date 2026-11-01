@@ -6,6 +6,7 @@
 #include <linux/capability.h>
 #include <linux/compiler.h>
 #include <linux/fs.h>
+#include <linux/key.h>
 #include <linux/gfp.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -446,6 +447,36 @@ static void allowlist_discard_partial_file(const char *path_str)
 	path_put(&path);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) ||                           \
+	defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
+extern int install_session_keyring_to_cred(struct cred *, struct key *);
+
+/*
+ * ksu_cred comes from early boot and has no session keyring, so on encrypted
+ * /data opening the allowlist fails with -ENOKEY (-126) and grants are lost on
+ * reboot. hand it init's keyring once we have it. the sunplex07 fork (09-19
+ * kernel) did this, upstream dropped it. prior art: BakaSU
+ * compat/kernel_compat.c setup_ksu_cred_session_keyring().
+ */
+static void ksu_cred_use_init_keyring(void)
+{
+	static DEFINE_MUTEX(keyring_lock);
+
+	if (!init_session_keyring || READ_ONCE(ksu_cred->session_keyring))
+		return;
+
+	mutex_lock(&keyring_lock);
+	if (!ksu_cred->session_keyring &&
+	    !install_session_keyring_to_cred(ksu_cred, init_session_keyring))
+		pr_info("allowlist: ksu_cred now uses init's session keyring\n");
+	mutex_unlock(&keyring_lock);
+}
+#else
+static inline void ksu_cred_use_init_keyring(void)
+{
+}
+#endif
+
 static void do_persistent_allow_list(struct callback_head *_cb)
 {
     u32 magic = FILE_MAGIC;
@@ -453,6 +484,8 @@ static void do_persistent_allow_list(struct callback_head *_cb)
     struct perm_data *p = NULL;
     loff_t off = 0;
     int i;
+
+    ksu_cred_use_init_keyring();
 
     const struct cred *saved = override_creds(ksu_cred);
     struct file *fp =
